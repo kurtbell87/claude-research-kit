@@ -189,6 +189,7 @@ your-project/
 ├── CLAUDE.md                            # Workflow rules for Claude
 ├── RESEARCH_LOG.md                      # Cumulative findings (institutional memory)
 ├── QUESTIONS.md                         # Research agenda
+├── DOMAIN_PRIORS.md                     # Human-injected domain knowledge
 ├── SYNTHESIS.md                         # Cumulative synthesis report (generated)
 ├── HANDOFF.md                           # Active handoff to dev tower (if any)
 ├── program_state.json                   # Program loop state (generated)
@@ -208,7 +209,8 @@ your-project/
 │   └── experiment-watch.py              # Live dashboard for monitoring phases
 ├── templates/
 │   ├── experiment-spec.md               # Template for experiment specs
-│   └── HANDOFF.md                       # Template for handoff documents
+│   ├── HANDOFF.md                       # Template for handoff documents
+│   └── DOMAIN_PRIORS.md                 # Template for domain knowledge injection
 └── .claude/
     ├── settings.json                    # Hook registration
     ├── hooks/
@@ -243,6 +245,7 @@ INCONCLUSIVE_THRESHOLD="3"              # Max consecutive INCONCLUSIVE before sk
 
 | Document | Purpose | Who updates it |
 |----------|---------|---------------|
+| **DOMAIN_PRIORS.md** | Human-injected domain knowledge and architectural priors | You (research lead) |
 | **QUESTIONS.md** | Research agenda, prioritized questions | You / READ agent |
 | **RESEARCH_LOG.md** | Cumulative findings from all experiments | READ agent (after each cycle) |
 | **experiments/exp-NNN.md** | Single experiment spec (frozen during RUN) | FRAME agent (once per cycle) |
@@ -288,6 +291,12 @@ The agent prompts in `.claude/prompts/` are designed to be domain-agnostic. You 
 - **Add metric-specific instructions** (e.g., "primary metric is always mean episodic return over 100 episodes")
 
 The `## Context` section is appended dynamically by `experiment.sh` at runtime — you don't need to hardcode paths.
+
+## Limitations
+
+- **Architecture search is guided, not automated.** The system prompts nudge agents toward considering architecture as an independent variable, and the SURVEY phase includes an Architectural Priors section, but the system does not perform automated neural architecture search. Domain expertise enters via `DOMAIN_PRIORS.md` — a human-editable file where the research lead can inject structural knowledge (e.g., "this problem has spatial structure, prefer CNNs over MLPs"). Without this file, agents may default to simple architectures.
+- **Stopping is mechanical, not information-theoretic.** The program loop stops on budget, cycle count, or question exhaustion — not on diminishing marginal information value. The `Decision Gate` column in QUESTIONS.md partially addresses this by letting the synthesize agent assess whether remaining questions would change downstream decisions.
+- **Hook enforcement is heuristic.** The pre-tool-use hook uses pattern matching on tool inputs, which can be bypassed by indirect execution (e.g., `subprocess.run` inside a Python script). This is defense-in-depth, not a security boundary.
 
 ## Requirements
 

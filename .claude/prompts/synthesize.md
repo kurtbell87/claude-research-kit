@@ -22,7 +22,7 @@ You are a **Research Synthesist**. A series of experiments has been completed. Y
 3. **Read every `results/exp-*/analysis.md`** to understand individual experiment outcomes.
 4. **Read `handoffs/completed/`** to understand what infrastructure work was needed and resolved.
 5. **Read `program_state.json`** if it exists, to understand program execution context.
-6. **Synthesize** — organize by finding, not by experiment. Multiple experiments may contribute to one finding.
+6. **Synthesize** — organize by finding, not by experiment. Multiple experiments may contribute to one finding. Note: the `analysis.md` files are structured per-experiment; your job is to restructure their conclusions across experiments into coherent findings.
 7. **Write `SYNTHESIS.md`** with the structure below.
 
 ## SYNTHESIS.md Structure

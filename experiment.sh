@@ -700,6 +700,8 @@ with open('$PROGRAM_STATE_FILE', 'w') as f:
 select_next_question() {
   # Parses QUESTIONS.md §4 for the highest-priority non-Blocked/Deferred question
   # Skips questions with >= INCONCLUSIVE_THRESHOLD consecutive INCONCLUSIVEs
+  # Skips sub-questions whose parent is already resolved
+  # Deprioritizes questions with no decision gate when others have one
   # Outputs: the question text (or empty if none found)
   python3 -c "
 import re, json, sys
@@ -722,10 +724,10 @@ try:
 except FileNotFoundError:
     sys.exit(1)
 
-# Find section 4
+# Find section 4 — collect all rows first to check parent status
 lines = content.split('\n')
 in_section = False
-candidates = []
+all_rows = []
 for line in lines:
     if re.match(r'^## 4\.', line):
         in_section = True
@@ -734,25 +736,66 @@ for line in lines:
         break
     if not in_section:
         continue
-    # Parse table rows: | Priority | Question | Status | Blocker | Experiment(s) |
-    # Also handle old 4-column format: | Priority | Question | Status | Experiment(s) |
-    m = re.match(r'^\|\s*(P\d+)\s*\|([^|]+)\|([^|]+)\|', line)
-    if not m:
+    # Split table cells
+    cells = [c.strip() for c in line.split('|')]
+    # Filter out empty strings from leading/trailing pipes
+    cells = [c for c in cells if c]
+    if len(cells) < 3:
         continue
-    priority = m.group(1).strip()
-    question = m.group(2).strip()
-    status = m.group(3).strip().lower()
-    # Skip header-like rows
+    priority = cells[0]
+    if not re.match(r'^P\d+$', priority):
+        continue
+    question = cells[1]
+    status = cells[2].lower()
+    # Skip header-like and placeholder rows
     if question.startswith('-') or question == 'Question':
         continue
-    # Skip placeholder rows
     if question.startswith('_') and question.endswith('_'):
         continue
-    # Skip blocked/deferred/answered
-    if status in ('blocked', 'deferred', 'answered'):
+    # Extract optional columns (backward compatible with 4, 5, 6, or 7-col tables)
+    parent = cells[3].strip() if len(cells) > 3 else '—'
+    blocker = cells[4].strip() if len(cells) > 4 else '—'
+    decision_gate = cells[5].strip() if len(cells) > 5 else '—'
+    all_rows.append({
+        'priority': priority,
+        'question': question,
+        'status': status,
+        'parent': parent,
+        'decision_gate': decision_gate,
+    })
+
+# Build set of resolved questions (by priority label or text) for parent check
+resolved = set()
+for r in all_rows:
+    if r['status'] in ('answered', 'deferred'):
+        resolved.add(r['priority'])
+        resolved.add(r['question'])
+
+# Also check §5 answered questions
+in_answered = False
+for line in lines:
+    if re.match(r'^## 5\.', line):
+        in_answered = True
         continue
+    if in_answered and line.strip() == '---':
+        break
+    if in_answered and line.startswith('|'):
+        cells = [c.strip() for c in line.split('|')]
+        cells = [c for c in cells if c]
+        if cells and not cells[0].startswith('-') and cells[0] != 'Question':
+            resolved.add(cells[0])
+
+# Filter candidates
+candidates = []
+for r in all_rows:
+    if r['status'] in ('blocked', 'deferred', 'answered'):
+        continue
+    # Skip sub-questions whose parent is resolved
+    if r['parent'] not in ('—', '-', ''):
+        if r['parent'] in resolved:
+            continue
     # Check consecutive INCONCLUSIVE count
-    q_hist = history.get(question, [])
+    q_hist = history.get(r['question'], [])
     consec = 0
     for v in reversed(q_hist):
         if v == 'INCONCLUSIVE':
@@ -761,13 +804,14 @@ for line in lines:
             break
     if consec >= threshold:
         continue
-    # Extract priority number for sorting
-    p_num = int(priority[1:])
-    candidates.append((p_num, question))
+    p_num = int(r['priority'][1:])
+    has_gate = r['decision_gate'] not in ('—', '-', '', '_What decision changes?_')
+    candidates.append((p_num, has_gate, r['question']))
 
 if candidates:
-    candidates.sort(key=lambda x: x[0])
-    print(candidates[0][1])
+    # Sort: priority first, then prefer questions with a decision gate
+    candidates.sort(key=lambda x: (x[0], not x[1]))
+    print(candidates[0][2])
 "
 }
 
