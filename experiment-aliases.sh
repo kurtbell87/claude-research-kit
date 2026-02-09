@@ -12,35 +12,11 @@ alias exp-read='bash $EXP_SCRIPT read'
 alias exp-log='bash $EXP_SCRIPT log'
 alias exp-cycle='bash $EXP_SCRIPT cycle'
 alias exp-full='bash $EXP_SCRIPT full'
+alias exp-program='bash $EXP_SCRIPT program'
+alias exp-synthesize='bash $EXP_SCRIPT synthesize'
 
 exp-status() {
-  echo "Research Experiment Status"
-  echo "========================="
-  echo ""
-  echo "Phase: ${EXP_PHASE:-not set}"
-  echo ""
-  echo "Experiment specs:"
-  for f in experiments/exp-*.md; do
-    [[ -f "$f" ]] || continue
-    if [[ ! -w "$f" ]]; then
-      echo "  LOCKED  $f"
-    else
-      echo "  open    $f"
-    fi
-  done
-  echo ""
-  echo "Result directories:"
-  for d in results/exp-*/; do
-    [[ -d "$d" ]] || continue
-    local metrics="$d/metrics.json"
-    local analysis="$d/analysis.md"
-    local status="incomplete"
-    [[ -f "$metrics" ]] && status="has metrics"
-    [[ -f "$analysis" ]] && status="analyzed"
-    echo "  $status  $d"
-  done
-  echo ""
-  echo "Run 'exp-survey \"question\"' to start a new research cycle."
+  bash $EXP_SCRIPT status
 }
 
 exp-unlock() {

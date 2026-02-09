@@ -33,11 +33,13 @@ _What are you explicitly NOT investigating right now?_
 
 _Prioritized list of research questions. Each should be addressable by one or more experiments._
 
-| Priority | Question | Status | Experiment(s) |
-|----------|----------|--------|---------------|
-| P0 | _Most important question_ | Not started | — |
-| P1 | _Second question_ | Not started | — |
-| P2 | _Third question_ | Not started | — |
+Status: `Not started` | `In progress` | `Answered` | `Blocked` | `Deferred`
+
+| Priority | Question | Status | Blocker | Experiment(s) |
+|----------|----------|--------|---------|---------------|
+| P0 | _Most important question_ | Not started | — | — |
+| P1 | _Second question_ | Not started | — | — |
+| P2 | _Third question_ | Not started | — | — |
 
 ---
 
@@ -45,9 +47,11 @@ _Prioritized list of research questions. Each should be addressable by one or mo
 
 _Move questions here as experiments resolve them._
 
-| Question | Answer | Evidence |
-|----------|--------|----------|
-| _Example: Does entropy reg help on CartPole?_ | _No — exp-001 refuted_ | _results/exp-001/analysis.md_ |
+| Question | Answer Type | Answer | Evidence |
+|----------|-------------|--------|----------|
+| _Example: Does entropy reg help on CartPole?_ | REFUTED | _No — exp-001 refuted_ | _results/exp-001/analysis.md_ |
+
+Answer types: `CONFIRMED` | `REFUTED` | `Deferred` | `Superseded`
 
 ---
 

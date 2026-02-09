@@ -12,8 +12,8 @@ set -euo pipefail
 
 PHASE="${EXP_PHASE:-}"
 
-# Only enforce during run and read phases.
-if [[ "$PHASE" != "run" && "$PHASE" != "read" ]]; then
+# Only enforce during run, read, and synthesize phases.
+if [[ "$PHASE" != "run" && "$PHASE" != "read" && "$PHASE" != "synthesize" ]]; then
   exit 0
 fi
 
@@ -121,6 +121,32 @@ if [[ "$PHASE" == "read" ]]; then
     if echo "$INPUT" | grep -qE '(experiments/.*\.md|/experiments/.*\.md)'; then
       echo "BLOCKED: Cannot modify experiment specs during READ phase." >&2
       echo "   You cannot retroactively change what success means." >&2
+      exit 1
+    fi
+  fi
+fi
+
+# ── SYNTHESIZE phase: Only allow writes to SYNTHESIS.md ──
+if [[ "$PHASE" == "synthesize" ]]; then
+
+  if [[ "$CLAUDE_TOOL_NAME" == "Bash" ]]; then
+    # Block all shell write operations
+    if echo "$INPUT" | grep -qEi '(>|tee|sed\s+-i|awk.*-i|perl\s+-[pi]|mv\s|cp\s.*>|rm\s)'; then
+      echo "BLOCKED: Shell write operations are not allowed during SYNTHESIZE phase." >&2
+      echo "   Use the Write tool to create SYNTHESIS.md only." >&2
+      exit 1
+    fi
+    # Block running training/evaluation
+    if echo "$INPUT" | grep -qEi '(python\s+train|python\s+eval|python\s+run|\.\/train|\.\/eval)'; then
+      echo "BLOCKED: Cannot run training or evaluation during SYNTHESIZE phase." >&2
+      exit 1
+    fi
+  fi
+
+  if [[ "$CLAUDE_TOOL_NAME" == "Edit" || "$CLAUDE_TOOL_NAME" == "Write" || "$CLAUDE_TOOL_NAME" == "MultiEdit" ]]; then
+    if ! echo "$INPUT" | grep -qE 'SYNTHESIS\.md'; then
+      echo "BLOCKED: During SYNTHESIZE phase, you may only write to SYNTHESIS.md." >&2
+      echo "   All other files are read-only during synthesis." >&2
       exit 1
     fi
   fi
