@@ -64,6 +64,7 @@ install_file "$KIT_DIR/templates/RESEARCH_LOG.md"      "$TARGET_DIR/RESEARCH_LOG
 install_file "$KIT_DIR/templates/QUESTIONS.md"          "$TARGET_DIR/QUESTIONS.md"
 install_file "$KIT_DIR/templates/experiment-spec.md"    "$TARGET_DIR/templates/experiment-spec.md"
 install_file "$KIT_DIR/templates/HANDOFF.md"            "$TARGET_DIR/templates/HANDOFF.md"
+install_file "$KIT_DIR/templates/DOMAIN_PRIORS.md"     "$TARGET_DIR/DOMAIN_PRIORS.md"
 
 if [[ -f "$TARGET_DIR/CLAUDE.md" ]]; then
   echo ""

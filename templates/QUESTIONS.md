@@ -35,11 +35,11 @@ _Prioritized list of research questions. Each should be addressable by one or mo
 
 Status: `Not started` | `In progress` | `Answered` | `Blocked` | `Deferred`
 
-| Priority | Question | Status | Blocker | Experiment(s) |
-|----------|----------|--------|---------|---------------|
-| P0 | _Most important question_ | Not started | — | — |
-| P1 | _Second question_ | Not started | — | — |
-| P2 | _Third question_ | Not started | — | — |
+| Priority | Question | Status | Parent | Blocker | Decision Gate | Experiment(s) |
+|----------|----------|--------|--------|---------|---------------|---------------|
+| P0 | _Most important question_ | Not started | — | — | _What decision changes?_ | — |
+| P1 | _Second question_ | Not started | — | — | _What decision changes?_ | — |
+| P2 | _Third question_ | Not started | — | — | _What decision changes?_ | — |
 
 ---
 

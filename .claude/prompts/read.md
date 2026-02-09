@@ -34,7 +34,9 @@ You are a **Critical Analyst**. An experiment has been executed and metrics have
 9. **Update `RESEARCH_LOG.md`** with a concise entry summarizing the findings.
 10. **Update `QUESTIONS.md`:**
     - If this experiment answers an open question in §4, move it to the §5 Answered Questions table. Set the `Answer Type` to CONFIRMED, REFUTED, Deferred, or Superseded.
-    - If this experiment reveals a new question, add it to §4 with appropriate priority.
+    - If this experiment reveals a new question, add it to §4 with appropriate priority. If the new question is a sub-question of an existing question, set the `Parent` column to reference the parent question's text or priority (e.g., "P0"). Fill in `Decision Gate` to explain what downstream decision this answer would affect (e.g., "Determines whether to invest in CNN infrastructure").
+    - If a parent question's sub-questions have been sufficiently resolved, mark the parent as Answered.
+    - If a parent question is resolved, mark any remaining orphaned sub-questions as `Deferred` with Blocker "Parent resolved".
     - If this experiment reveals a question is **blocked on infrastructure work** (something outside research scope — see below), set its Status to `Blocked` and fill in the `Blocker` column with a short description (e.g., "needs multi-agent env support").
     - If a question should no longer be pursued, set Status to `Deferred` with a reason in Blocker.
 11. **Handoff detection** — If a question requires work that is **outside research scope** (see Research Tower Scope below), create `HANDOFF.md` in the project root. Rules:
