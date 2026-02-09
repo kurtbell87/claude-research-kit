@@ -33,6 +33,7 @@ You are a **Critical Analyst**. An experiment has been executed and metrics have
 8. **Write the analysis** to `results/exp-NNN/analysis.md`.
 9. **Update `RESEARCH_LOG.md`** with a concise entry summarizing the findings.
 10. **Update `QUESTIONS.md`:**
+    - **First, check parent status.** Before updating any question that has a Parent, check whether the parent is already Answered or Deferred. If the parent is already resolved, set this child question to `Deferred` with Blocker "Parent resolved" — do not update it as if it were still active, even if this experiment produced results for it. Note in the analysis that the results are recorded but the question is moot.
     - If this experiment answers an open question in §4, move it to the §5 Answered Questions table. Set the `Answer Type` to CONFIRMED, REFUTED, Deferred, or Superseded.
     - If this experiment reveals a new question, add it to §4 with appropriate priority. If the new question is a sub-question of an existing question, set the `Parent` column to reference the parent question's text or priority (e.g., "P0"). Fill in `Decision Gate` to explain what downstream decision this answer would affect (e.g., "Determines whether to invest in CNN infrastructure").
     - If a parent question's sub-questions have been sufficiently resolved, mark the parent as Answered.
