@@ -104,6 +104,47 @@ Creates a feature branch, commits all results, and opens a PR.
 ./experiment.sh full "research question" experiments/exp-NNN-name.md
 ```
 
+### Program Mode (Auto-advancing)
+
+For multi-question research programs, use program mode instead of manual cycles:
+
+```bash
+# Auto-advance through all open questions:
+./experiment.sh program
+
+# Limit cycles:
+./experiment.sh program --max-cycles 5
+
+# Preview what would run (no execution):
+./experiment.sh program --dry-run
+
+# Check status at any time:
+./experiment.sh status
+
+# Generate synthesis report manually:
+./experiment.sh synthesize
+```
+
+Program mode automatically:
+- Picks the highest-priority unblocked question from QUESTIONS.md
+- Runs a full SURVEY-FRAME-RUN-READ-LOG cycle
+- Records results in `program_state.json`
+- Stops when: all questions resolved, max cycles reached, GPU budget exhausted, or a handoff is emitted
+
+### Handoff Protocol
+
+When the READ agent detects that a research question requires infrastructure work (environment code changes, new dependencies, bug fixes), it creates `HANDOFF.md`. The program loop pauses until the handoff is resolved.
+
+```bash
+# After resolving the handoff:
+./experiment.sh complete-handoff    # Archives to handoffs/completed/
+
+# Resume the program loop:
+./experiment.sh program
+```
+
+**Tower scope:** Research can change hyperparameters, algorithms, experiment scripts, and configs. Anything that could break other experiments if done wrong (shared env code, interfaces, dependencies) requires a handoff.
+
 ### Critical Rules
 
 - **You are the orchestrator, not the implementor.** Steps 1-4 MUST use `./experiment.sh` commands.

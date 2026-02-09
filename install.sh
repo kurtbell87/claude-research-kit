@@ -48,6 +48,7 @@ install_file       "$KIT_DIR/.claude/prompts/survey.md"       "$TARGET_DIR/.clau
 install_file       "$KIT_DIR/.claude/prompts/frame.md"        "$TARGET_DIR/.claude/prompts/frame.md"
 install_file       "$KIT_DIR/.claude/prompts/run.md"          "$TARGET_DIR/.claude/prompts/run.md"
 install_file       "$KIT_DIR/.claude/prompts/read.md"         "$TARGET_DIR/.claude/prompts/read.md"
+install_file       "$KIT_DIR/.claude/prompts/synthesize.md"  "$TARGET_DIR/.claude/prompts/synthesize.md"
 
 if [[ -f "$TARGET_DIR/.claude/settings.json" ]]; then
   echo ""
@@ -62,6 +63,7 @@ echo -e "${BOLD}Template files:${NC}"
 install_file "$KIT_DIR/templates/RESEARCH_LOG.md"      "$TARGET_DIR/RESEARCH_LOG.md"
 install_file "$KIT_DIR/templates/QUESTIONS.md"          "$TARGET_DIR/QUESTIONS.md"
 install_file "$KIT_DIR/templates/experiment-spec.md"    "$TARGET_DIR/templates/experiment-spec.md"
+install_file "$KIT_DIR/templates/HANDOFF.md"            "$TARGET_DIR/templates/HANDOFF.md"
 
 if [[ -f "$TARGET_DIR/CLAUDE.md" ]]; then
   echo ""
@@ -75,8 +77,10 @@ fi
 
 mkdir -p "$TARGET_DIR/experiments"
 mkdir -p "$TARGET_DIR/results"
+mkdir -p "$TARGET_DIR/handoffs/completed"
 echo -e "  ${GREEN}ready:${NC}   experiments/ (experiment specs go here)"
 echo -e "  ${GREEN}ready:${NC}   results/ (experiment outputs go here)"
+echo -e "  ${GREEN}ready:${NC}   handoffs/completed/ (archived handoffs go here)"
 
 echo ""
 echo -e "${BOLD}${GREEN}Done!${NC}"

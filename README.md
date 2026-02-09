@@ -7,11 +7,14 @@ Inspired by [claude-tdd-kit](https://github.com/kurtbell87/claude-tdd-kit). Same
 ## How It Works
 
 ```
-You have a question ──► experiment.sh survey  ──► Surveyor reviews prior work & codebase
-                        experiment.sh frame   ──► Designer writes experiment spec with pre-committed success criteria
-                        experiment.sh run     ──► Executor implements & runs (spec is OS-locked)
-                        experiment.sh read    ──► Analyst evaluates against locked metrics (CONFIRMED/REFUTED/INCONCLUSIVE)
-                        experiment.sh log     ──► Commit results, PR, update research log
+You have a question ──► experiment.sh survey      ──► Surveyor reviews prior work & codebase
+                        experiment.sh frame       ──► Designer writes experiment spec with pre-committed success criteria
+                        experiment.sh run         ──► Executor implements & runs (spec is OS-locked)
+                        experiment.sh read        ──► Analyst evaluates against locked metrics (CONFIRMED/REFUTED/INCONCLUSIVE)
+                        experiment.sh log         ──► Commit results, PR, update research log
+                        experiment.sh synthesize  ──► Synthesist produces cumulative findings report
+
+Or auto-advance:   ──► experiment.sh program      ──► Loops through all open questions automatically
 ```
 
 **Key idea:** Each phase spawns a separate Claude agent with a dedicated system prompt. During RUN, the experiment spec is `chmod 444` (read-only) and a pre-tool-use hook blocks any attempt to modify it. During READ, the metrics file is locked — the analyst cannot change the numbers. Failure (REFUTED) is a first-class outcome, not an error state.
@@ -136,6 +139,47 @@ Verdict options:
 
 Commits results, creates a PR, updates the research log.
 
+### SYNTHESIZE — "What did we learn overall?"
+
+**Agent**: Research Synthesist (read-only except SYNTHESIS.md)
+
+Produces a cumulative findings report from all completed experiments. Organizes by finding (not chronology), includes negative results, calibrates confidence, and makes actionable recommendations.
+
+**Can**: Read everything. Write SYNTHESIS.md.
+**Cannot**: Modify any other file. Run experiments.
+
+## Program Mode
+
+Program mode auto-advances through all open questions in `QUESTIONS.md`:
+
+```bash
+./experiment.sh program                    # Run until all questions resolved
+./experiment.sh program --max-cycles 5     # Limit to 5 cycles
+./experiment.sh program --dry-run          # Preview without executing
+./experiment.sh status                     # Check progress at any time
+```
+
+### Termination Conditions
+
+| Condition | What happens |
+|-----------|-------------|
+| All questions resolved | Synthesis report generated |
+| Max cycles reached | Partial synthesis report generated |
+| GPU budget exhausted | Partial synthesis report generated |
+| HANDOFF.md emitted | Loop pauses, awaiting resolution |
+
+### Handoff Protocol
+
+When the READ agent detects that a research question requires infrastructure work outside research scope (environment code, new dependencies, shared interfaces, bug fixes), it creates `HANDOFF.md`. The program loop pauses.
+
+```bash
+# After resolving the handoff externally:
+./experiment.sh complete-handoff    # Archives to handoffs/completed/
+./experiment.sh program             # Resumes the loop
+```
+
+The decision heuristic: **"Would a different experiment break if I did this wrong? If yes → handoff."**
+
 ## What Gets Installed
 
 ```
@@ -145,6 +189,9 @@ your-project/
 ├── CLAUDE.md                            # Workflow rules for Claude
 ├── RESEARCH_LOG.md                      # Cumulative findings (institutional memory)
 ├── QUESTIONS.md                         # Research agenda
+├── SYNTHESIS.md                         # Cumulative synthesis report (generated)
+├── HANDOFF.md                           # Active handoff to dev tower (if any)
+├── program_state.json                   # Program loop state (generated)
 ├── experiments/                         # Experiment spec files
 │   ├── survey-topic.md                  # Survey outputs
 │   └── exp-001-name.md                  # Experiment specs
@@ -154,10 +201,14 @@ your-project/
 │       ├── config.json                  # Frozen config
 │       ├── metrics.json                 # Raw metrics (locked during READ)
 │       └── analysis.md                  # READ phase output
+├── handoffs/
+│   └── completed/                       # Archived resolved handoffs
+│       └── 20250115-143022-slug.md
 ├── scripts/
 │   └── experiment-watch.py              # Live dashboard for monitoring phases
 ├── templates/
-│   └── experiment-spec.md               # Template for experiment specs
+│   ├── experiment-spec.md               # Template for experiment specs
+│   └── HANDOFF.md                       # Template for handoff documents
 └── .claude/
     ├── settings.json                    # Hook registration
     ├── hooks/
@@ -166,7 +217,8 @@ your-project/
         ├── survey.md                    # Surveyor agent prompt
         ├── frame.md                     # Experiment designer prompt
         ├── run.md                       # Executor agent prompt
-        └── read.md                      # Analyst agent prompt
+        ├── read.md                      # Analyst agent prompt
+        └── synthesize.md               # Synthesist agent prompt
 ```
 
 ## Configuration
@@ -182,15 +234,21 @@ DATA_DIR="data"                          # Datasets
 CONFIGS_DIR="configs"                    # Training configs
 MAX_GPU_HOURS="4"                        # Budget per experiment
 MAX_RUNS="10"                            # Max training runs per experiment
+MAX_PROGRAM_CYCLES="10"                  # Max cycles in program mode
+MAX_PROGRAM_GPU_HOURS="40"               # Total GPU budget for program mode
+INCONCLUSIVE_THRESHOLD="3"              # Max consecutive INCONCLUSIVE before skipping question
 ```
 
 ## The Three Documents
 
 | Document | Purpose | Who updates it |
 |----------|---------|---------------|
-| **QUESTIONS.md** | Research agenda, prioritized questions | You (occasionally) |
+| **QUESTIONS.md** | Research agenda, prioritized questions | You / READ agent |
 | **RESEARCH_LOG.md** | Cumulative findings from all experiments | READ agent (after each cycle) |
 | **experiments/exp-NNN.md** | Single experiment spec (frozen during RUN) | FRAME agent (once per cycle) |
+| **SYNTHESIS.md** | Cumulative findings report | SYNTHESIZE agent |
+| **HANDOFF.md** | Active infrastructure request to dev tower | READ agent |
+| **program_state.json** | Program loop state (cycles, GPU budget) | Program loop |
 
 ## Differences from TDD Kit
 
@@ -215,7 +273,9 @@ exp-read experiments/exp-001-name.md      # Analyze (metrics locked)
 exp-log experiments/exp-001-name.md       # Commit & PR
 exp-cycle experiments/exp-001-name.md     # frame -> run -> read -> log
 exp-full "question" experiments/exp-001.md  # Full pipeline
-exp-status                                # Show experiment status
+exp-program                               # Auto-advance through questions
+exp-synthesize                            # Generate synthesis report
+exp-status                                # Show research program status
 exp-unlock                                # Emergency: restore permissions
 ```
 

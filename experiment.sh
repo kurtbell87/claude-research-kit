@@ -142,6 +142,143 @@ list_result_dirs() {
 }
 
 # ──────────────────────────────────────────────────────────────
+# Status
+# ──────────────────────────────────────────────────────────────
+
+run_status() {
+  echo ""
+  echo -e "${BOLD}Research Program Status${NC}"
+  echo -e "${BOLD}======================${NC}"
+  echo ""
+
+  # ── Open questions from QUESTIONS.md ──
+  if [[ -f QUESTIONS.md ]]; then
+    echo -e "${CYAN}Open Questions (QUESTIONS.md §4):${NC}"
+    local in_section=false
+    local q_total=0 q_not_started=0 q_in_progress=0 q_blocked=0 q_deferred=0
+    while IFS= read -r line; do
+      if [[ "$line" =~ ^##\ 4\. ]]; then
+        in_section=true
+        continue
+      fi
+      if $in_section && [[ "$line" =~ ^--- ]]; then
+        break
+      fi
+      if $in_section && [[ "$line" =~ ^\|\ *P[0-9] ]]; then
+        q_total=$((q_total + 1))
+        if echo "$line" | grep -qi "not started"; then
+          q_not_started=$((q_not_started + 1))
+        elif echo "$line" | grep -qi "in progress"; then
+          q_in_progress=$((q_in_progress + 1))
+        elif echo "$line" | grep -qi "blocked"; then
+          q_blocked=$((q_blocked + 1))
+        elif echo "$line" | grep -qi "deferred"; then
+          q_deferred=$((q_deferred + 1))
+        fi
+      fi
+    done < QUESTIONS.md
+    echo "  Total: $q_total  Not started: $q_not_started  In progress: $q_in_progress  Blocked: $q_blocked  Deferred: $q_deferred"
+  else
+    echo -e "  ${YELLOW}QUESTIONS.md not found${NC}"
+  fi
+
+  echo ""
+
+  # ── Experiment results ──
+  echo -e "${CYAN}Experiments:${NC}"
+  local e_total=0 e_confirmed=0 e_refuted=0 e_inconclusive=0 e_incomplete=0
+  if [[ -d "$RESULTS_DIR" ]]; then
+    for d in "$RESULTS_DIR"/exp-*/; do
+      [[ -d "$d" ]] || continue
+      e_total=$((e_total + 1))
+      local analysis="$d/analysis.md"
+      if [[ -f "$analysis" ]]; then
+        local verdict
+        verdict=$(grep -m1 '^## Verdict:' "$analysis" 2>/dev/null | sed 's/^## Verdict:[[:space:]]*//' || true)
+        case "$verdict" in
+          *CONFIRMED*)    e_confirmed=$((e_confirmed + 1)) ;;
+          *REFUTED*)      e_refuted=$((e_refuted + 1)) ;;
+          *INCONCLUSIVE*) e_inconclusive=$((e_inconclusive + 1)) ;;
+          *)              e_incomplete=$((e_incomplete + 1)) ;;
+        esac
+      else
+        e_incomplete=$((e_incomplete + 1))
+      fi
+    done
+  fi
+  echo "  Total: $e_total  Confirmed: $e_confirmed  Refuted: $e_refuted  Inconclusive: $e_inconclusive  Incomplete: $e_incomplete"
+
+  echo ""
+
+  # ── Program state ──
+  local state_file="${PROGRAM_STATE_FILE:-program_state.json}"
+  if [[ -f "$state_file" ]]; then
+    echo -e "${CYAN}Program State ($state_file):${NC}"
+    python3 -c "
+import json, sys
+with open('$state_file') as f:
+    s = json.load(f)
+print(f\"  Cycles completed: {s.get('cycles_completed', 0)}\")
+print(f\"  GPU hours used:   {s.get('gpu_hours_used', 0):.1f}\")
+print(f\"  Started:          {s.get('started_at', 'N/A')}\")
+print(f\"  Last cycle:       {s.get('last_cycle_at', 'N/A')}\")
+" 2>/dev/null || echo "  (could not parse $state_file)"
+  fi
+
+  echo ""
+
+  # ── Handoff / Synthesis status ──
+  if [[ -f HANDOFF.md ]]; then
+    echo -e "  ${YELLOW}HANDOFF.md exists${NC} — program loop is paused pending handoff resolution"
+  fi
+  if [[ -f SYNTHESIS.md ]]; then
+    echo -e "  ${GREEN}SYNTHESIS.md exists${NC} — synthesis report has been generated"
+  fi
+
+  echo ""
+}
+
+# ──────────────────────────────────────────────────────────────
+# Handoff Management
+# ──────────────────────────────────────────────────────────────
+
+validate_handoff() {
+  local file="${1:-HANDOFF.md}"
+  if [[ ! -f "$file" ]]; then
+    echo -e "${RED}Error: $file not found${NC}" >&2
+    return 1
+  fi
+  local valid=true
+  for header in "# Handoff:" "**Date:**" "**Reason:**" "## What Is Needed" "## After Resolution"; do
+    if ! grep -qF "$header" "$file"; then
+      echo -e "${RED}Missing required section: $header${NC}" >&2
+      valid=false
+    fi
+  done
+  if $valid; then
+    echo -e "${GREEN}HANDOFF.md is valid${NC}"
+    return 0
+  else
+    return 1
+  fi
+}
+
+complete_handoff() {
+  local file="${1:-HANDOFF.md}"
+  if [[ ! -f "$file" ]]; then
+    echo -e "${RED}Error: $file not found${NC}" >&2
+    return 1
+  fi
+  validate_handoff "$file" || return 1
+  mkdir -p handoffs/completed
+  local slug
+  slug=$(grep -m1 '^# Handoff:' "$file" | sed 's/^# Handoff:[[:space:]]*//' | tr '[:upper:]' '[:lower:]' | tr ' ' '-' | tr -cd 'a-z0-9-')
+  local dest="handoffs/completed/$(date +%Y%m%d-%H%M%S)-${slug}.md"
+  mv "$file" "$dest"
+  echo -e "${GREEN}Handoff archived:${NC} $dest"
+}
+
+# ──────────────────────────────────────────────────────────────
 # Phase Runners
 # ──────────────────────────────────────────────────────────────
 
@@ -459,41 +596,448 @@ run_full() {
 }
 
 # ──────────────────────────────────────────────────────────────
+# Synthesize
+# ──────────────────────────────────────────────────────────────
+
+run_synthesize() {
+  local trigger="${1:-manual}"
+
+  echo ""
+  echo -e "${MAGENTA}======================================================${NC}"
+  echo -e "${MAGENTA}  SYNTHESIZE PHASE -- Research Synthesis Report${NC}"
+  echo -e "${MAGENTA}======================================================${NC}"
+  echo -e "  Trigger: $trigger"
+  echo ""
+
+  # Build context listing
+  local analysis_files
+  analysis_files=$(find "$RESULTS_DIR" -name "analysis.md" -type f 2>/dev/null | sort | tr '\n' ', ')
+  local completed_handoffs
+  completed_handoffs=$(find handoffs/completed -name "*.md" -type f 2>/dev/null | sort | tr '\n' ', ')
+  local state_info="N/A"
+  if [[ -f "${PROGRAM_STATE_FILE:-program_state.json}" ]]; then
+    state_info="${PROGRAM_STATE_FILE:-program_state.json}"
+  fi
+
+  export EXP_PHASE="synthesize"
+
+  claude \
+    --output-format stream-json \
+    --append-system-prompt "$(cat "$PROMPT_DIR/synthesize.md")
+
+## Context
+- Trigger reason: $trigger
+- Research questions: QUESTIONS.md
+- Research log: RESEARCH_LOG.md
+- Analysis files: ${analysis_files:-none}
+- Completed handoffs: ${completed_handoffs:-none}
+- Program state: $state_info
+- Results directory: $RESULTS_DIR
+
+Read all analysis files and produce a synthesis report to SYNTHESIS.md." \
+    --allowed-tools "Read,Write,Glob,Grep" \
+    -p "Synthesize all experiment results into SYNTHESIS.md. Trigger: $trigger" \
+    2>&1 | tee /tmp/exp-synthesize.log
+}
+
+# ──────────────────────────────────────────────────────────────
+# Program Loop
+# ──────────────────────────────────────────────────────────────
+
+# Program mode configuration
+MAX_PROGRAM_CYCLES="${MAX_PROGRAM_CYCLES:-10}"
+MAX_PROGRAM_GPU_HOURS="${MAX_PROGRAM_GPU_HOURS:-40}"
+INCONCLUSIVE_THRESHOLD="${INCONCLUSIVE_THRESHOLD:-3}"
+PROGRAM_STATE_FILE="${PROGRAM_STATE_FILE:-program_state.json}"
+
+init_program_state() {
+  if [[ ! -f "$PROGRAM_STATE_FILE" ]]; then
+    python3 -c "
+import json, datetime
+state = {
+    'cycles_completed': 0,
+    'gpu_hours_used': 0.0,
+    'started_at': datetime.datetime.now().isoformat(),
+    'last_cycle_at': None,
+    'question_history': {},
+    'cycle_log': []
+}
+with open('$PROGRAM_STATE_FILE', 'w') as f:
+    json.dump(state, f, indent=2)
+"
+    echo -e "${GREEN}Initialized:${NC} $PROGRAM_STATE_FILE"
+  else
+    echo -e "${BLUE}Resuming from:${NC} $PROGRAM_STATE_FILE"
+  fi
+}
+
+record_cycle_result() {
+  local question="$1" verdict="$2" gpu_hours="$3" spec_file="$4"
+  python3 -c "
+import json, datetime
+with open('$PROGRAM_STATE_FILE') as f:
+    state = json.load(f)
+state['cycles_completed'] += 1
+state['gpu_hours_used'] += float('$gpu_hours')
+state['last_cycle_at'] = datetime.datetime.now().isoformat()
+q = '''$question'''
+if q not in state['question_history']:
+    state['question_history'][q] = []
+state['question_history'][q].append('$verdict')
+state['cycle_log'].append({
+    'cycle': state['cycles_completed'],
+    'question': q,
+    'verdict': '$verdict',
+    'gpu_hours': float('$gpu_hours'),
+    'spec_file': '$spec_file',
+    'timestamp': datetime.datetime.now().isoformat()
+})
+with open('$PROGRAM_STATE_FILE', 'w') as f:
+    json.dump(state, f, indent=2)
+"
+}
+
+select_next_question() {
+  # Parses QUESTIONS.md §4 for the highest-priority non-Blocked/Deferred question
+  # Skips questions with >= INCONCLUSIVE_THRESHOLD consecutive INCONCLUSIVEs
+  # Outputs: the question text (or empty if none found)
+  python3 -c "
+import re, json, sys
+
+threshold = int('$INCONCLUSIVE_THRESHOLD')
+
+# Read question history
+history = {}
+try:
+    with open('$PROGRAM_STATE_FILE') as f:
+        state = json.load(f)
+    history = state.get('question_history', {})
+except (FileNotFoundError, json.JSONDecodeError):
+    pass
+
+# Parse QUESTIONS.md
+try:
+    with open('QUESTIONS.md') as f:
+        content = f.read()
+except FileNotFoundError:
+    sys.exit(1)
+
+# Find section 4
+lines = content.split('\n')
+in_section = False
+candidates = []
+for line in lines:
+    if re.match(r'^## 4\.', line):
+        in_section = True
+        continue
+    if in_section and line.strip() == '---':
+        break
+    if not in_section:
+        continue
+    # Parse table rows: | Priority | Question | Status | Blocker | Experiment(s) |
+    # Also handle old 4-column format: | Priority | Question | Status | Experiment(s) |
+    m = re.match(r'^\|\s*(P\d+)\s*\|([^|]+)\|([^|]+)\|', line)
+    if not m:
+        continue
+    priority = m.group(1).strip()
+    question = m.group(2).strip()
+    status = m.group(3).strip().lower()
+    # Skip header-like rows
+    if question.startswith('-') or question == 'Question':
+        continue
+    # Skip placeholder rows
+    if question.startswith('_') and question.endswith('_'):
+        continue
+    # Skip blocked/deferred/answered
+    if status in ('blocked', 'deferred', 'answered'):
+        continue
+    # Check consecutive INCONCLUSIVE count
+    q_hist = history.get(question, [])
+    consec = 0
+    for v in reversed(q_hist):
+        if v == 'INCONCLUSIVE':
+            consec += 1
+        else:
+            break
+    if consec >= threshold:
+        continue
+    # Extract priority number for sorting
+    p_num = int(priority[1:])
+    candidates.append((p_num, question))
+
+if candidates:
+    candidates.sort(key=lambda x: x[0])
+    print(candidates[0][1])
+"
+}
+
+extract_verdict() {
+  local analysis_file="$1"
+  if [[ -f "$analysis_file" ]]; then
+    grep -m1 '^## Verdict:' "$analysis_file" 2>/dev/null | sed 's/^## Verdict:[[:space:]]*//' | tr -d '[:space:]' || echo "ERROR"
+  else
+    echo "ERROR"
+  fi
+}
+
+extract_gpu_hours() {
+  local metrics_file="$1"
+  if [[ -f "$metrics_file" ]]; then
+    python3 -c "
+import json
+try:
+    with open('$metrics_file') as f:
+        m = json.load(f)
+    print(m.get('resource_usage', {}).get('gpu_hours', 0))
+except:
+    print(0)
+" 2>/dev/null || echo "0"
+  else
+    echo "0"
+  fi
+}
+
+question_to_slug() {
+  echo "$1" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9]/-/g' | sed 's/--*/-/g' | sed 's/^-//;s/-$//' | cut -c1-40
+}
+
+run_program() {
+  local max_cycles="$MAX_PROGRAM_CYCLES"
+  local dry_run=false
+
+  # Parse arguments
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --max-cycles) max_cycles="$2"; shift 2 ;;
+      --dry-run)    dry_run=true; shift ;;
+      *)            echo -e "${RED}Unknown argument: $1${NC}" >&2; return 1 ;;
+    esac
+  done
+
+  echo ""
+  echo -e "${BOLD}${CYAN}======================================================${NC}"
+  echo -e "${BOLD}${CYAN}  PROGRAM MODE -- Auto-advancing Research Loop${NC}"
+  echo -e "${BOLD}${CYAN}======================================================${NC}"
+  echo -e "  Max cycles:     $max_cycles"
+  echo -e "  GPU budget:     $MAX_PROGRAM_GPU_HOURS hours"
+  echo -e "  Inconclusive threshold: $INCONCLUSIVE_THRESHOLD"
+  echo -e "  Dry run:        $dry_run"
+  echo ""
+
+  init_program_state
+
+  # SIGINT trap for clean interruption
+  trap 'echo -e "\n${YELLOW}Program loop interrupted. State saved in $PROGRAM_STATE_FILE.${NC}"; exit 130' INT
+
+  while true; do
+    local cycles_completed
+    cycles_completed=$(python3 -c "
+import json
+with open('$PROGRAM_STATE_FILE') as f:
+    print(json.load(f).get('cycles_completed', 0))
+" 2>/dev/null || echo "0")
+
+    local gpu_hours_used
+    gpu_hours_used=$(python3 -c "
+import json
+with open('$PROGRAM_STATE_FILE') as f:
+    print(json.load(f).get('gpu_hours_used', 0))
+" 2>/dev/null || echo "0")
+
+    echo ""
+    echo -e "${CYAN}── Cycle check (completed: $cycles_completed, GPU hours: $gpu_hours_used) ──${NC}"
+
+    # ── Termination check 1: HANDOFF.md exists ──
+    if [[ -f HANDOFF.md ]]; then
+      echo -e "${YELLOW}HANDOFF.md exists — program loop paused.${NC}"
+      echo -e "Resolve the handoff and run: ${BOLD}./experiment.sh complete-handoff${NC}"
+      echo -e "Then resume: ${BOLD}./experiment.sh program${NC}"
+      run_status
+      return 0
+    fi
+
+    # ── Termination check 2: Max cycles reached ──
+    if (( cycles_completed >= max_cycles )); then
+      echo -e "${YELLOW}Max cycles reached ($max_cycles). Generating synthesis...${NC}"
+      if ! $dry_run; then
+        run_synthesize "max_cycles"
+      else
+        echo -e "  ${BLUE}[dry-run] Would run: synthesize max_cycles${NC}"
+      fi
+      return 0
+    fi
+
+    # ── Termination check 3: GPU budget exhausted ──
+    local budget_exceeded
+    budget_exceeded=$(python3 -c "print('yes' if float('$gpu_hours_used') >= float('$MAX_PROGRAM_GPU_HOURS') else 'no')")
+    if [[ "$budget_exceeded" == "yes" ]]; then
+      echo -e "${YELLOW}GPU budget exhausted (${gpu_hours_used}h / ${MAX_PROGRAM_GPU_HOURS}h). Generating synthesis...${NC}"
+      if ! $dry_run; then
+        run_synthesize "budget_exhausted"
+      else
+        echo -e "  ${BLUE}[dry-run] Would run: synthesize budget_exhausted${NC}"
+      fi
+      return 0
+    fi
+
+    # ── Termination check 4: No unblocked questions ──
+    local next_question
+    next_question=$(select_next_question)
+    if [[ -z "$next_question" ]]; then
+      echo -e "${GREEN}No unblocked questions remaining. Generating synthesis...${NC}"
+      if ! $dry_run; then
+        run_synthesize "all_resolved"
+      else
+        echo -e "  ${BLUE}[dry-run] Would run: synthesize all_resolved${NC}"
+      fi
+      return 0
+    fi
+
+    # ── Pick next question and generate spec filename ──
+    local next_num
+    next_num=$(next_experiment_number)
+    local slug
+    slug=$(question_to_slug "$next_question")
+    local spec_file="$EXPERIMENTS_DIR/exp-${next_num}-${slug}.md"
+
+    echo -e "${BOLD}Next question:${NC} $next_question"
+    echo -e "${BOLD}Spec file:${NC}    $spec_file"
+
+    if $dry_run; then
+      echo -e "  ${BLUE}[dry-run] Would run: survey → frame → run → read → log${NC}"
+      # Simulate cycle completion for dry-run state
+      record_cycle_result "$next_question" "DRY_RUN" "0" "$spec_file"
+      continue
+    fi
+
+    # ── Check if survey already exists for this question ──
+    local survey_exists=false
+    for sf in "$EXPERIMENTS_DIR"/survey-*.md; do
+      [[ -f "$sf" ]] || continue
+      # Simple heuristic: check if the survey file mentions key words from the question
+      if grep -qi "$(echo "$next_question" | cut -d' ' -f1-3)" "$sf" 2>/dev/null; then
+        survey_exists=true
+        echo -e "  ${BLUE}Existing survey found:${NC} $sf (skipping survey phase)"
+        break
+      fi
+    done
+
+    # ── Run survey if needed ──
+    if ! $survey_exists; then
+      echo -e "\n${CYAN}── SURVEY ──${NC}"
+      run_survey "$next_question" || {
+        echo -e "${YELLOW}Survey failed, continuing to frame...${NC}"
+      }
+    fi
+
+    # ── Run frame/run/read in a SUBSHELL to isolate trap ──
+    echo -e "\n${CYAN}── FRAME / RUN / READ (subshell) ──${NC}"
+    local subshell_exit=0
+    (
+      run_frame "$spec_file"
+      echo -e "\n${YELLOW}--- Frame complete. Running experiment... ---${NC}\n"
+      run_run "$spec_file"
+      echo -e "\n${YELLOW}--- Run complete. Analyzing results... ---${NC}\n"
+      run_read "$spec_file"
+    ) || subshell_exit=$?
+
+    if (( subshell_exit != 0 )); then
+      echo -e "${RED}Cycle failed (exit code: $subshell_exit). Recording ERROR and continuing...${NC}"
+      record_cycle_result "$next_question" "ERROR" "0" "$spec_file"
+      continue
+    fi
+
+    # ── Run LOG outside subshell (needs git state in parent) ──
+    echo -e "\n${CYAN}── LOG ──${NC}"
+    run_log "$spec_file" || {
+      echo -e "${YELLOW}Log phase failed, but experiment results are saved.${NC}"
+    }
+
+    # ── Extract verdict and GPU hours, record in state ──
+    local results_path
+    results_path="$(results_dir_for_spec "$spec_file")"
+    local verdict
+    verdict=$(extract_verdict "$results_path/analysis.md")
+    local gpu_hours
+    gpu_hours=$(extract_gpu_hours "$results_path/metrics.json")
+
+    record_cycle_result "$next_question" "$verdict" "$gpu_hours" "$spec_file"
+
+    echo -e "\n${GREEN}Cycle complete:${NC} $verdict (${gpu_hours}h GPU)"
+
+    # ── Warn on consecutive INCONCLUSIVE ──
+    if [[ "$verdict" == "INCONCLUSIVE" ]]; then
+      local consec_count
+      consec_count=$(python3 -c "
+import json
+with open('$PROGRAM_STATE_FILE') as f:
+    state = json.load(f)
+q = '''$next_question'''
+hist = state.get('question_history', {}).get(q, [])
+c = 0
+for v in reversed(hist):
+    if v == 'INCONCLUSIVE':
+        c += 1
+    else:
+        break
+print(c)
+" 2>/dev/null || echo "0")
+      if (( consec_count >= INCONCLUSIVE_THRESHOLD )); then
+        echo -e "${YELLOW}Warning: $consec_count consecutive INCONCLUSIVE for this question. It will be skipped in future cycles.${NC}"
+      elif (( consec_count >= 2 )); then
+        echo -e "${YELLOW}Note: $consec_count consecutive INCONCLUSIVE for this question (threshold: $INCONCLUSIVE_THRESHOLD).${NC}"
+      fi
+    fi
+  done
+}
+
+# ──────────────────────────────────────────────────────────────
 # Main
 # ──────────────────────────────────────────────────────────────
 
 case "${1:-help}" in
-  survey)   shift; run_survey "$@" ;;
-  frame)    shift; run_frame "$@" ;;
-  run)      shift; run_run "$@" ;;
-  read)     shift; run_read "$@" ;;
-  log)      shift; run_log "$@" ;;
-  cycle)    shift; run_cycle "$@" ;;
-  full)     shift; run_full "$@" ;;
-  watch)    shift; python3 scripts/experiment-watch.py "$@" ;;
+  survey)     shift; run_survey "$@" ;;
+  frame)      shift; run_frame "$@" ;;
+  run)        shift; run_run "$@" ;;
+  read)       shift; run_read "$@" ;;
+  log)        shift; run_log "$@" ;;
+  cycle)      shift; run_cycle "$@" ;;
+  full)       shift; run_full "$@" ;;
+  status)     shift; run_status "$@" ;;
+  program)    shift; run_program "$@" ;;
+  synthesize)        shift; run_synthesize "${1:-manual}" ;;
+  complete-handoff)  shift; complete_handoff "$@" ;;
+  validate-handoff)  shift; validate_handoff "$@" ;;
+  watch)             shift; python3 scripts/experiment-watch.py "$@" ;;
   help|*)
     echo "Usage: experiment.sh <phase> [args]"
     echo ""
     echo "Phases:"
-    echo "  survey  <question>             Survey prior work for a research question"
-    echo "  frame   <spec-file>            Design experiment (write spec)"
-    echo "  run     <spec-file>            Execute experiment (spec is locked)"
-    echo "  read    <spec-file>            Analyze results against spec"
-    echo "  log     <spec-file>            Commit results, create PR"
-    echo "  cycle   <spec-file>            Run frame -> run -> read -> log"
-    echo "  full    <question> <spec-file> Run survey -> frame -> run -> read -> log"
-    echo "  watch   [phase]                Live-tail a running phase (--resolve for summary)"
+    echo "  survey      <question>             Survey prior work for a research question"
+    echo "  frame       <spec-file>            Design experiment (write spec)"
+    echo "  run         <spec-file>            Execute experiment (spec is locked)"
+    echo "  read        <spec-file>            Analyze results against spec"
+    echo "  log         <spec-file>            Commit results, create PR"
+    echo "  cycle       <spec-file>            Run frame -> run -> read -> log"
+    echo "  full        <question> <spec-file> Run survey -> frame -> run -> read -> log"
+    echo "  status                             Show research program status"
+    echo "  program     [--max-cycles N] [--dry-run]  Auto-advance through research questions"
+    echo "  synthesize  [reason]               Generate synthesis report"
+    echo "  watch       [phase]                Live-tail a running phase (--resolve for summary)"
     echo ""
     echo "Environment:"
-    echo "  SRC_DIR='src'                Source / model code directory"
-    echo "  DATA_DIR='data'              Dataset directory"
-    echo "  CONFIGS_DIR='configs'        Config directory"
-    echo "  TRAIN_CMD='...'              Training command"
-    echo "  EVAL_CMD='...'               Evaluation command"
-    echo "  TEST_CMD='...'               Unit test command"
-    echo "  MAX_GPU_HOURS='4'            Budget per experiment"
-    echo "  MAX_RUNS='10'                Max training runs per experiment"
-    echo "  EXP_AUTO_MERGE='false'       Auto-merge PR after creation"
-    echo "  EXP_BASE_BRANCH='main'       Base branch for PRs"
+    echo "  SRC_DIR='src'                  Source / model code directory"
+    echo "  DATA_DIR='data'                Dataset directory"
+    echo "  CONFIGS_DIR='configs'          Config directory"
+    echo "  TRAIN_CMD='...'                Training command"
+    echo "  EVAL_CMD='...'                 Evaluation command"
+    echo "  TEST_CMD='...'                 Unit test command"
+    echo "  MAX_GPU_HOURS='4'              Budget per experiment"
+    echo "  MAX_RUNS='10'                  Max training runs per experiment"
+    echo "  MAX_PROGRAM_CYCLES='10'        Max cycles in program mode"
+    echo "  MAX_PROGRAM_GPU_HOURS='40'     Total GPU budget for program mode"
+    echo "  INCONCLUSIVE_THRESHOLD='3'     Max consecutive INCONCLUSIVE before skipping"
+    echo "  EXP_AUTO_MERGE='false'         Auto-merge PR after creation"
+    echo "  EXP_BASE_BRANCH='main'         Base branch for PRs"
     ;;
 esac
