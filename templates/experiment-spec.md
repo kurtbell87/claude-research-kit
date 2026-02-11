@@ -45,13 +45,18 @@ The RUN agent executes this BEFORE the full protocol. -->
 4. ... -->
 
 ## Resource Budget
+<!-- Tier determines protocol complexity. Quick ≤15min, Standard ≤2h, Heavy ≤24h.
+Estimate wall time from actual data size before committing. -->
+**Tier:** _Quick | Standard | Heavy_
 - Max GPU-hours: _N_
-- Max wall-clock time: _N hours_
+- Max wall-clock time: _N_
 - Max training runs: _N_
 - Max seeds per configuration: _N_
 
 ## Abort Criteria
-<!-- When to stop early:
+<!-- When to stop early. Per-run time thresholds must use 3-5x expected
+time based on actual data size. Unrealistically tight time aborts cause
+kill-restart cycles that waste more time than they save.
 - Loss diverges (NaN or > threshold) for N consecutive steps
 - Primary metric shows no improvement over baseline after N% of budget
 - Sanity check metric regresses beyond tolerance -->
