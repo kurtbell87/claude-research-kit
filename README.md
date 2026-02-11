@@ -83,6 +83,19 @@ Each phase streams structured JSON logs to `/tmp/exp-{phase}.log`. The built-in 
 
 The dashboard shows elapsed time, model, tool call counts, files read/written/edited, agent narration, and metric snapshots from training output.
 
+Phase runners redirect all sub-agent output to disk only (`/tmp/exp-{phase}.log`). Stdout receives a compact summary — the last agent message, exit code, and log path — so the orchestrator's context window stays clean. If you need more detail, grep or read the log file directly.
+
+### What the Orchestrator Sees
+
+Each `./experiment.sh` phase returns **only** a compact summary on stdout:
+
+- **Phase output** goes to `/tmp/exp-{phase}.log` (not stdout)
+- **Stdout receives:** last agent message (≤500 chars) + exit code + log path
+- **To get more detail:** grep or read the log file (pull-based)
+- **The watch script** reads logs directly and is unaffected by this
+
+This is intentional — it prevents sub-agent verbosity from flooding the orchestrator's context window. The orchestrator should treat the summary as the primary signal and only pull from the log when diagnosing a failure.
+
 ## The Five Phases
 
 ### SURVEY — "What do we already know?"
