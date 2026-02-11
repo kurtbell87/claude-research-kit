@@ -6,6 +6,10 @@
 
 set -euo pipefail
 
+# ── Parse flags ──
+UPGRADE=false
+if [[ "${1:-}" == "--upgrade" ]]; then UPGRADE=true; shift; fi
+
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
@@ -17,9 +21,13 @@ TARGET_DIR="$(pwd)"
 
 echo ""
 echo -e "${BOLD}Claude Research Kit -- Installer${NC}"
+if [[ "$UPGRADE" == "true" ]]; then
+  echo -e "${YELLOW}Mode: UPGRADE (machinery overwritten, config backed up, state untouched)${NC}"
+fi
 echo -e "Installing into: ${BLUE}$TARGET_DIR${NC}"
 echo ""
 
+# ── Helper: state files -- never touched on upgrade ──
 install_file() {
   local src="$1" dest="$2"
   mkdir -p "$(dirname "$dest")"
@@ -36,21 +44,66 @@ install_executable() {
   chmod +x "$2"
 }
 
+# ── Helper: machinery files -- always overwritten on upgrade ──
+upgrade_machinery() {
+  local src="$1" dest="$2"
+  mkdir -p "$(dirname "$dest")"
+  if [[ "$UPGRADE" == "true" ]]; then
+    cp "$src" "$dest"
+    echo -e "  ${GREEN}updated:${NC} $dest"
+  elif [[ -f "$dest" ]]; then
+    echo -e "  ${YELLOW}exists:${NC}  $dest (skipped)"
+  else
+    cp "$src" "$dest"
+    echo -e "  ${GREEN}created:${NC} $dest"
+  fi
+}
+
+upgrade_machinery_executable() {
+  upgrade_machinery "$1" "$2"
+  chmod +x "$2"
+}
+
+# ── Helper: config files -- backed up + overwritten on upgrade ──
+upgrade_config() {
+  local src="$1" dest="$2"
+  mkdir -p "$(dirname "$dest")"
+  if [[ "$UPGRADE" == "true" && -f "$dest" ]]; then
+    cp "$dest" "${dest}.bak"
+    cp "$src" "$dest"
+    echo -e "  ${GREEN}updated:${NC} $dest"
+    echo -e "  ${YELLOW}backup:${NC}  ${dest}.bak (merge your config from here)"
+  elif [[ -f "$dest" ]]; then
+    echo -e "  ${YELLOW}exists:${NC}  $dest (skipped)"
+  else
+    cp "$src" "$dest"
+    echo -e "  ${GREEN}created:${NC} $dest"
+  fi
+}
+
+upgrade_config_executable() {
+  upgrade_config "$1" "$2"
+  chmod +x "$2"
+}
+
 echo -e "${BOLD}Core orchestration:${NC}"
-install_executable "$KIT_DIR/experiment.sh"          "$TARGET_DIR/experiment.sh"
-install_file       "$KIT_DIR/experiment-aliases.sh"  "$TARGET_DIR/experiment-aliases.sh"
-install_file       "$KIT_DIR/scripts/experiment-watch.py" "$TARGET_DIR/scripts/experiment-watch.py"
+upgrade_config_executable    "$KIT_DIR/experiment.sh"          "$TARGET_DIR/experiment.sh"
+upgrade_machinery            "$KIT_DIR/experiment-aliases.sh"  "$TARGET_DIR/experiment-aliases.sh"
+upgrade_machinery            "$KIT_DIR/scripts/experiment-watch.py" "$TARGET_DIR/scripts/experiment-watch.py"
 
 echo ""
 echo -e "${BOLD}Claude Code hooks & prompts:${NC}"
-install_executable "$KIT_DIR/.claude/hooks/pre-tool-use.sh"   "$TARGET_DIR/.claude/hooks/pre-tool-use.sh"
-install_file       "$KIT_DIR/.claude/prompts/survey.md"       "$TARGET_DIR/.claude/prompts/survey.md"
-install_file       "$KIT_DIR/.claude/prompts/frame.md"        "$TARGET_DIR/.claude/prompts/frame.md"
-install_file       "$KIT_DIR/.claude/prompts/run.md"          "$TARGET_DIR/.claude/prompts/run.md"
-install_file       "$KIT_DIR/.claude/prompts/read.md"         "$TARGET_DIR/.claude/prompts/read.md"
-install_file       "$KIT_DIR/.claude/prompts/synthesize.md"  "$TARGET_DIR/.claude/prompts/synthesize.md"
+upgrade_config_executable    "$KIT_DIR/.claude/hooks/pre-tool-use.sh"   "$TARGET_DIR/.claude/hooks/pre-tool-use.sh"
+upgrade_machinery            "$KIT_DIR/.claude/prompts/survey.md"       "$TARGET_DIR/.claude/prompts/survey.md"
+upgrade_machinery            "$KIT_DIR/.claude/prompts/frame.md"        "$TARGET_DIR/.claude/prompts/frame.md"
+upgrade_machinery            "$KIT_DIR/.claude/prompts/run.md"          "$TARGET_DIR/.claude/prompts/run.md"
+upgrade_machinery            "$KIT_DIR/.claude/prompts/read.md"         "$TARGET_DIR/.claude/prompts/read.md"
+upgrade_machinery            "$KIT_DIR/.claude/prompts/synthesize.md"  "$TARGET_DIR/.claude/prompts/synthesize.md"
 
-if [[ -f "$TARGET_DIR/.claude/settings.json" ]]; then
+# ── Settings (config) ──
+if [[ "$UPGRADE" == "true" ]]; then
+  upgrade_config "$KIT_DIR/.claude/settings.json" "$TARGET_DIR/.claude/settings.json"
+elif [[ -f "$TARGET_DIR/.claude/settings.json" ]]; then
   echo ""
   echo -e "  ${YELLOW}exists:${NC}  .claude/settings.json"
   echo -e "  ${YELLOW}ACTION NEEDED:${NC} Merge the hook config manually."
@@ -58,6 +111,7 @@ else
   install_file "$KIT_DIR/.claude/settings.json" "$TARGET_DIR/.claude/settings.json"
 fi
 
+# ── Template files (state: never touched on upgrade) ──
 echo ""
 echo -e "${BOLD}Template files:${NC}"
 install_file "$KIT_DIR/templates/RESEARCH_LOG.md"      "$TARGET_DIR/RESEARCH_LOG.md"
