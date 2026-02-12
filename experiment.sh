@@ -334,8 +334,8 @@ run_survey() {
 ## Context
 - Research question / topic: $question
 - Source directory: $SRC_DIR
-- Existing experiments: $(list_experiment_specs | tr '\n' ', ')
-- Existing results: $(list_result_dirs | tr '\n' ', ')
+- Existing experiments: $(list_experiment_specs | wc -l | tr -d ' ') spec(s) in $EXPERIMENTS_DIR (use Glob to discover)
+- Existing results: $(list_result_dirs | wc -l | tr -d ' ') result dir(s) in $RESULTS_DIR (use Glob to discover)
 - Research log: RESEARCH_LOG.md
 - Research questions: QUESTIONS.md
 - Train command: $TRAIN_CMD
@@ -380,8 +380,8 @@ run_frame() {
 - Experiment spec to write: $spec_file
 - Source directory: $SRC_DIR
 - Results directory: $RESULTS_DIR
-- Existing experiments: $(list_experiment_specs | tr '\n' ', ')
-- Existing results: $(list_result_dirs | tr '\n' ', ')
+- Existing experiments: $(list_experiment_specs | wc -l | tr -d ' ') spec(s) in $EXPERIMENTS_DIR (use Glob to discover)
+- Existing results: $(list_result_dirs | wc -l | tr -d ' ') result dir(s) in $RESULTS_DIR (use Glob to discover)
 - Research log: RESEARCH_LOG.md
 - Train command: $TRAIN_CMD
 - Eval command: $EVAL_CMD
@@ -503,8 +503,8 @@ run_read() {
 - Results directory: $results_path
 - Metrics file: $results_path/metrics.json (READ-ONLY -- these are the ground truth numbers)
 - Research log: RESEARCH_LOG.md
-- Previous experiments: $(list_experiment_specs | tr '\n' ', ')
-- Previous results: $(list_result_dirs | tr '\n' ', ')
+- Previous experiments: $(list_experiment_specs | wc -l | tr -d ' ') spec(s) in $EXPERIMENTS_DIR (use Glob to discover)
+- Previous results: $(list_result_dirs | wc -l | tr -d ' ') result dir(s) in $RESULTS_DIR (use Glob to discover)
 
 Read the spec and metrics, then write your analysis to $results_path/analysis.md. Address EVERY metric in the spec." \
     --allowed-tools "Read,Write,Edit,Bash,Glob,Grep" \
@@ -655,9 +655,9 @@ run_synthesize() {
 
   # Build context listing
   local analysis_files
-  analysis_files=$(find "$RESULTS_DIR" -name "analysis.md" -type f 2>/dev/null | sort | tr '\n' ', ')
+  analysis_files=$(find "$RESULTS_DIR" -name "analysis.md" -type f 2>/dev/null | wc -l | tr -d ' ')
   local completed_handoffs
-  completed_handoffs=$(find handoffs/completed -name "*.md" -type f 2>/dev/null | sort | tr '\n' ', ')
+  completed_handoffs=$(find handoffs/completed -name "*.md" -type f 2>/dev/null | wc -l | tr -d ' ')
   local state_info="N/A"
   if [[ -f "${PROGRAM_STATE_FILE:-program_state.json}" ]]; then
     state_info="${PROGRAM_STATE_FILE:-program_state.json}"
@@ -674,12 +674,12 @@ run_synthesize() {
 - Trigger reason: $trigger
 - Research questions: QUESTIONS.md
 - Research log: RESEARCH_LOG.md
-- Analysis files: ${analysis_files:-none}
-- Completed handoffs: ${completed_handoffs:-none}
+- Analysis files: ${analysis_files:-0} file(s) in $RESULTS_DIR/*/analysis.md (use Glob to discover)
+- Completed handoffs: ${completed_handoffs:-0} file(s) in handoffs/completed/ (use Glob to discover)
 - Program state: $state_info
 - Results directory: $RESULTS_DIR
 
-Read all analysis files and produce a synthesis report to SYNTHESIS.md." \
+Read RESEARCH_LOG.md for summaries first. Use Glob to discover analysis files, then selectively read those you need detail on." \
     --allowed-tools "Read,Write,Glob,Grep" \
     -p "Synthesize all experiment results into SYNTHESIS.md. Trigger: $trigger" \
     > /tmp/exp-synthesize.log 2>&1 || exit_code=$?
