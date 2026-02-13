@@ -37,7 +37,7 @@ Read `RESEARCH_LOG.md` and `QUESTIONS.md` to determine the next question to inve
 ./experiment.sh survey "your research question"
 ```
 
-**Output is a compact summary only.** The command returns the last agent message (≤500 chars), exit code, and log path. Full output is in `/tmp/exp-survey.log` — read it if you need more detail.
+**Output is a compact summary only.** The command returns the last agent message (≤500 chars), exit code, and log path. Full output is in `$EXP_LOG_DIR/survey.log` — read it if you need more detail. (`EXP_LOG_DIR` defaults to `/tmp/exp-<project-name>/`.)
 
 This spawns a dedicated survey agent that reviews:
 - Prior experiments and their outcomes
@@ -52,7 +52,7 @@ The survey agent produces a briefing document but does NOT design experiments or
 ./experiment.sh frame experiments/exp-NNN-name.md
 ```
 
-**Output is a compact summary only.** The command returns the last agent message (≤500 chars), exit code, and log path. Full output is in `/tmp/exp-frame.log` — read it if you need more detail.
+**Output is a compact summary only.** The command returns the last agent message (≤500 chars), exit code, and log path. Full output is in `$EXP_LOG_DIR/frame.log` — read it if you need more detail.
 
 This spawns a dedicated experiment design agent that:
 - Reads the survey output
@@ -67,7 +67,7 @@ This spawns a dedicated experiment design agent that:
 ./experiment.sh run experiments/exp-NNN-name.md
 ```
 
-**Output is a compact summary only.** The command returns the last agent message (≤500 chars), exit code, and log path. Full output is in `/tmp/exp-run.log` — read it if you need more detail.
+**Output is a compact summary only.** The command returns the last agent message (≤500 chars), exit code, and log path. Full output is in `$EXP_LOG_DIR/run.log` — read it if you need more detail.
 
 This spawns a dedicated execution agent. The experiment spec is OS-locked (read-only). The agent:
 - Implements whatever code is needed
@@ -84,7 +84,7 @@ This spawns a dedicated execution agent. The experiment spec is OS-locked (read-
 ./experiment.sh read experiments/exp-NNN-name.md
 ```
 
-**Output is a compact summary only.** The command returns the last agent message (≤500 chars), exit code, and log path. Full output is in `/tmp/exp-read.log` — read it if you need more detail.
+**Output is a compact summary only.** The command returns the last agent message (≤500 chars), exit code, and log path. Full output is in `$EXP_LOG_DIR/read.log` — read it if you need more detail.
 
 This spawns a dedicated analysis agent. Metrics are locked (read-only). The agent:
 - Evaluates each success criterion (pass/fail, no partial credit)
