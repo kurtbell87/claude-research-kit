@@ -71,7 +71,7 @@ $EDITOR QUESTIONS.md         # Define your research questions
 
 ## Monitoring a Running Phase
 
-Each phase streams structured JSON logs to `/tmp/exp-{phase}.log`. The built-in `watch` command parses these into a live dashboard:
+Each phase streams structured JSON logs to `$EXP_LOG_DIR/{phase}.log` (defaults to `/tmp/exp-<project-name>/`). The built-in `watch` command parses these into a live dashboard:
 
 ```bash
 ./experiment.sh watch run              # Live-tail the run phase
@@ -83,13 +83,13 @@ Each phase streams structured JSON logs to `/tmp/exp-{phase}.log`. The built-in 
 
 The dashboard shows elapsed time, model, tool call counts, files read/written/edited, agent narration, and metric snapshots from training output.
 
-Phase runners redirect all sub-agent output to disk only (`/tmp/exp-{phase}.log`). Stdout receives a compact summary — the last agent message, exit code, and log path — so the orchestrator's context window stays clean. If you need more detail, grep or read the log file directly.
+Phase runners redirect all sub-agent output to disk only (`$EXP_LOG_DIR/{phase}.log`). Stdout receives a compact summary — the last agent message, exit code, and log path — so the orchestrator's context window stays clean. If you need more detail, grep or read the log file directly.
 
 ### What the Orchestrator Sees
 
 Each `./experiment.sh` phase returns **only** a compact summary on stdout:
 
-- **Phase output** goes to `/tmp/exp-{phase}.log` (not stdout)
+- **Phase output** goes to `$EXP_LOG_DIR/{phase}.log` (not stdout)
 - **Stdout receives:** last agent message (≤500 chars) + exit code + log path
 - **To get more detail:** grep or read the log file (pull-based)
 - **The watch script** reads logs directly and is unaffected by this
