@@ -39,6 +39,12 @@ TEST_CMD="${TEST_CMD:-echo 'Set TEST_CMD for your project'}"       # Unit tests 
 MAX_GPU_HOURS="${MAX_GPU_HOURS:-4}"
 MAX_RUNS="${MAX_RUNS:-10}"
 
+# Log directory -- per-project isolation under /tmp
+_project_name="$(basename "$(git rev-parse --show-toplevel 2>/dev/null || pwd)")"
+EXP_LOG_DIR="${EXP_LOG_DIR:-/tmp/exp-${_project_name}}"
+export EXP_LOG_DIR
+mkdir -p "$EXP_LOG_DIR"
+
 # Git / PR settings
 EXP_AUTO_MERGE="${EXP_AUTO_MERGE:-false}"
 EXP_DELETE_BRANCH="${EXP_DELETE_BRANCH:-false}"
@@ -136,10 +142,10 @@ ensure_hooks_executable() {
 _phase_summary() {
   # Extract the final agent message from the stream-json log and print a
   # compact summary.  This keeps the orchestrator's context window lean —
-  # the full transcript stays on disk at /tmp/exp-{phase}.log.
+  # the full transcript stays on disk at $EXP_LOG_DIR/{phase}.log.
   local phase="$1"
   local exit_code="$2"
-  local log="/tmp/exp-${phase}.log"
+  local log="$EXP_LOG_DIR/${phase}.log"
 
   local summary
   summary=$(tail -20 "$log" 2>/dev/null | python3 -c "
@@ -344,7 +350,7 @@ run_survey() {
 Start by reading RESEARCH_LOG.md and QUESTIONS.md, then survey the codebase and prior experiments." \
     --allowed-tools "Read,Bash,Glob,Grep,Write" \
     -p "Survey the current state of knowledge on: $question" \
-    > /tmp/exp-survey.log 2>&1 || exit_code=$?
+    > "$EXP_LOG_DIR/survey.log" 2>&1 || exit_code=$?
 
   _phase_summary "survey" "$exit_code"
 }
@@ -391,7 +397,7 @@ run_frame() {
 Read the RESEARCH_LOG.md and any survey output first, then design the experiment." \
     --allowed-tools "Read,Write,Edit,Bash,Glob,Grep" \
     -p "Design the experiment and write the spec to $spec_file" \
-    > /tmp/exp-frame.log 2>&1 || exit_code=$?
+    > "$EXP_LOG_DIR/frame.log" 2>&1 || exit_code=$?
 
   _phase_summary "frame" "$exit_code"
 }
@@ -453,7 +459,7 @@ run_run() {
 Read the experiment spec first. Implement and execute the experiment. Write ALL metrics to $results_path/metrics.json." \
     --allowed-tools "Read,Write,Edit,Bash,Glob,Grep" \
     -p "Read the experiment spec, implement, and execute. Write all metrics to $results_path/metrics.json" \
-    > /tmp/exp-run.log 2>&1 || exit_code=$?
+    > "$EXP_LOG_DIR/run.log" 2>&1 || exit_code=$?
 
   _phase_summary "run" "$exit_code"
 }
@@ -509,7 +515,7 @@ run_read() {
 Read the spec and metrics, then write your analysis to $results_path/analysis.md. Address EVERY metric in the spec." \
     --allowed-tools "Read,Write,Edit,Bash,Glob,Grep" \
     -p "Analyze the experiment results. Write analysis to $results_path/analysis.md" \
-    > /tmp/exp-read.log 2>&1 || exit_code=$?
+    > "$EXP_LOG_DIR/read.log" 2>&1 || exit_code=$?
 
   _phase_summary "read" "$exit_code"
 }
@@ -682,7 +688,7 @@ run_synthesize() {
 Read RESEARCH_LOG.md for summaries first. Use Glob to discover analysis files, then selectively read those you need detail on." \
     --allowed-tools "Read,Write,Glob,Grep" \
     -p "Synthesize all experiment results into SYNTHESIS.md. Trigger: $trigger" \
-    > /tmp/exp-synthesize.log 2>&1 || exit_code=$?
+    > "$EXP_LOG_DIR/synthesize.log" 2>&1 || exit_code=$?
 
   _phase_summary "synthesize" "$exit_code"
 }
@@ -1123,6 +1129,7 @@ case "${1:-help}" in
     echo "  TRAIN_CMD='...'                Training command"
     echo "  EVAL_CMD='...'                 Evaluation command"
     echo "  TEST_CMD='...'                 Unit test command"
+    echo "  EXP_LOG_DIR='/tmp/exp-<project>'  Log directory (auto-derived from repo name)"
     echo "  MAX_GPU_HOURS='4'              Budget per experiment"
     echo "  MAX_RUNS='10'                  Max training runs per experiment"
     echo "  MAX_PROGRAM_CYCLES='10'        Max cycles in program mode"

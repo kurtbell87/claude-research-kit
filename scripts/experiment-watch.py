@@ -392,11 +392,29 @@ def print_summary(state: AgentState):
 
 # ── Main loop ─────────────────────────────────────────────────────────────────
 
+def _get_log_dir() -> str:
+    """Get the per-project log directory from env or derive it."""
+    log_dir = os.environ.get("EXP_LOG_DIR")
+    if log_dir:
+        return log_dir
+    import subprocess
+    try:
+        toplevel = subprocess.check_output(
+            ["git", "rev-parse", "--show-toplevel"],
+            stderr=subprocess.DEVNULL, text=True
+        ).strip()
+        project = os.path.basename(toplevel)
+    except (subprocess.CalledProcessError, FileNotFoundError):
+        project = os.path.basename(os.getcwd())
+    return f"/tmp/exp-{project}"
+
+
 def find_log_file() -> str:
-    """Auto-detect the most recent exp-*.log."""
-    candidates = glob.glob("/tmp/exp-*.log")
+    """Auto-detect the most recent *.log in the project log directory."""
+    log_dir = _get_log_dir()
+    candidates = glob.glob(f"{log_dir}/*.log")
     if not candidates:
-        print(f"{RED}No /tmp/exp-*.log files found.{RESET}")
+        print(f"{RED}No log files found in {log_dir}/{RESET}")
         print(f"Start a phase first:  ./experiment.sh survey \"your question\"")
         sys.exit(1)
     best = max(candidates, key=os.path.getmtime)
@@ -493,7 +511,8 @@ def main():
     args = [a for a in args if not a.startswith("-")]
 
     if args and args[0] in PHASES:
-        filepath = f"/tmp/exp-{args[0]}.log"
+        log_dir = _get_log_dir()
+        filepath = f"{log_dir}/{args[0]}.log"
     elif args:
         filepath = args[0]
     else:
